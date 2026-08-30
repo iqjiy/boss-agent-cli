@@ -11,12 +11,18 @@
   不重试、不提示重新登录。候选人与招聘者的 httpx 刷新判定、浏览器通道和平台 adapter 使用同一分类器
   （`boss_agent_cli.api.zhipin_errors.classify_code_37`）。按错误码分支的下游 Agent 请新增 `ENVIRONMENT_RISK`
   终止分支，绝不对其自动登录/刷新/重试。
+
 ### Added
 - **公开 strict-CDP 浏览器模式。** `BrowserSession` / `BossClient` / `BossRecruiterClient` 新增
   `browser_mode="cdp_required"`：跳过 Bridge，要求已配置的 CDP 端点，CDP 失败立即抛错，绝不启动
   headless。CLI 新增 `--browser-mode`（取值 `auto` / `cdp-required`，config 兼容 `cdp_required`
   拼写），并透传到候选人、招聘者与 wizard 平台客户端；`boss schema` 的 `global_options` 同步声明
   该参数。`auto` 行为完全不变。
+
+- **公开职位 lid 与浏览器职位卡片接口。** `JobItem` 新增 `lid` 字段（解析自列表响应
+  `raw.lid`，缺失时为空串，并随 `to_dict()` 序列化）——取 JD 全文需要 `securityId` + `lid`
+  两个参数，此前走 CLI 的调用方拿不到 `lid`。`BossClient` 新增 `job_card_browser(security_id, lid)`，
+  强制走浏览器通道获取职位卡片；既有 `job_card()` 的 httpx 优先行为完全不变。
 
 ### Fixed
 - 修复扫码登录在「首页预热」阶段卡住时永久挂起：BOSS 直聘首页在自动化下偶发长时间不完成加载，`page.goto` 超时后若仍对页面执行 `page.evaluate`（取 UA / stoken），patchright 会因执行上下文无法建立而无限阻塞，导致 `boss login` 卡死且不落盘凭证。现在 UA 改在已加载的登录页上提前采集；`_warm_home_for_runtime` 返回首页是否真正加载完成，仅在确认加载后才对页面 evaluate 提取 stoken，否则回退读取 cookie jar；并对首页导航超时增加「跳 `about:blank` 重置卡死导航后重试一次」，显著降低风控验证页/加载缓慢导致的 `Page.goto: Timeout 15000ms exceeded` 误报。`login_via_cdp` / `refresh_stoken` / `refresh_stoken_via_cdp` 同步加固；CDP 登录/刷新 stoken 也改为优先页面 evaluate、失败回退 cookie jar（安全验证跳转期间 `domcontentloaded` 可能未触发，但 `__zp_stoken__` 已写入 cookie jar）。
