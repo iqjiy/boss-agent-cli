@@ -191,7 +191,8 @@ def test_request_raises_auth_error_after_max_403_retries(mock_http_client_cls, m
 def test_request_refresh_passes_browser_source_to_auth_manager(mock_http_client_cls, mock_sleep, mock_uniform):
 	"""stoken 刷新必须带上 browser_source，否则策略表管不到 httpx 通道的 headless 降级。"""
 	auth = FakeAuthManager()
-	first = FakeHttpxClient([FakeResponse(payload={"code": endpoints.CODE_STOKEN_EXPIRED})])
+	# 文案明确指向 stoken 过期，分类器才会判为 token_expired 并触发刷新（语义不明则 fail closed 不刷新）。
+	first = FakeHttpxClient([FakeResponse(payload={"code": endpoints.CODE_STOKEN_EXPIRED, "message": "stoken 已过期"})])
 	second = FakeHttpxClient([FakeResponse(payload={"code": 0, "zpData": {"ok": True}})])
 	mock_http_client_cls.side_effect = [first, second]
 

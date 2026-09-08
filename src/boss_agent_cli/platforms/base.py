@@ -130,7 +130,7 @@ class Platform(ABC):
 		"""解析错误响应，返回 (统一错误码, 原始消息)。
 
 		统一错误码对齐 CLAUDE.md 错误码枚举：
-		AUTH_EXPIRED / RATE_LIMITED / TOKEN_REFRESH_FAILED / ACCOUNT_RISK / UNKNOWN。
+		AUTH_EXPIRED / RATE_LIMITED / TOKEN_REFRESH_FAILED / ACCOUNT_RISK / ENVIRONMENT_RISK / UNKNOWN。
 
 		这里只枚举**从平台响应体解析出来**的码。通道 / 来源类失败
 		（``CDP_UNAVAILABLE``、``BROWSER_SESSION_NOT_FOUND`` 等）由 CLI 自身的
