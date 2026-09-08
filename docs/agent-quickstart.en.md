@@ -98,7 +98,7 @@ Recommended usage:
 - `boss hr <subcommand>` switches to recruiter mode automatically, so you do not need to infer `--role` yourself
 - Candidate-side and recruiter-side commands share the same `stdout JSON / stderr logs` contract
 - `hr` currently supports `zhipin-recruiter` only; use `boss --platform zhilian --role recruiter agent ...` for Zhaopin recruiter automation
-- When platform responses map to `ACCOUNT_RISK` or `RATE_LIMITED`, stop automated access instead of retrying a batch
+- When platform responses map to `ACCOUNT_RISK`, `RATE_LIMITED`, or `ENVIRONMENT_RISK`, stop automated access instead of retrying a batch
 
 ## 3) Recovery flow and troubleshooting
 
@@ -113,6 +113,7 @@ boss status
 
 Common recovery actions:
 - `AUTH_REQUIRED` / `AUTH_EXPIRED` / `TOKEN_REFRESH_FAILED`: run `boss login` again
+- `ENVIRONMENT_RISK`: stop automated access; keep the current dedicated profile, confirm on the official page, and reduce access frequency
 - `wt2` present but `stoken` missing: treat it as partial auth; start Chrome with a CDP debugging port and run `boss login --cdp`, or run `boss login` again
 - `RATE_LIMITED`: wait and retry
 - `NOT_SUPPORTED`: switch to a platform or workflow goal reported as available by schema

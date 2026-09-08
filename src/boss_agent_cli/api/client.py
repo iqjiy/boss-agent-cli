@@ -63,34 +63,30 @@ class BossClient(_BaseHttpClient):
 		data: dict[str, Any] | None = None,
 		browser_source: str | None = None,
 	) -> dict[str, Any]:
-		for attempt in range(2):
-			browser = self._get_browser(browser_source=browser_source)
-			result = browser.request(method, url, params=params, data=data)
-			code = result.get("code")
-			is_cdp = getattr(browser, "_is_cdp", False)
-			mode = "CDP" if is_cdp else ("Bridge" if getattr(browser, "_is_bridge", False) else "headless patchright")
-			if code == endpoints.CODE_ACCOUNT_RISK:
-				msg = response_message(result) or "账户存在异常行为"
-				raise AccountRiskError(
-					f"BOSS 直聘风控拦截 (code {code}): {msg}。"
-					f"当前浏览器模式: {mode}。"
-					f"建议：停止自动化访问并回到 BOSS 直聘官方页面手动处理。",
-					is_cdp=is_cdp,
-				)
-			if code == endpoints.CODE_STOKEN_EXPIRED:
-				msg = response_message(result) or "未知 code 37 响应"
-				if classify_code_37(result) == "environment_risk":
-					raise EnvironmentRiskError(
-						f"BOSS 直聘访问环境风控 (code {code}): {msg}。"
-						f"当前浏览器模式: {mode}。已停止且未刷新或重试；"
-						"请保留当前专用 profile，在官方页面确认后降低访问频率。",
-						is_cdp=is_cdp,
-					)
-				if attempt == 0:
-					self._auth.force_refresh(cdp_url=self._cdp_url)
-					continue
-			return result
-		raise AssertionError("unreachable browser retry state")
+		# 单次请求，不重试：浏览器通道的 stoken 由页面 JS 生成，force_refresh 拿不到新凭证，
+		# 重试只是对已被风控拦截的高风险端点再打一次（见 docs/research/platforms/zhipin.md 红线）。
+		browser = self._get_browser(browser_source=browser_source)
+		result = browser.request(method, url, params=params, data=data)
+		code = result.get("code")
+		is_cdp = getattr(browser, "_is_cdp", False)
+		mode = "CDP" if is_cdp else ("Bridge" if getattr(browser, "_is_bridge", False) else "headless patchright")
+		if code == endpoints.CODE_ACCOUNT_RISK:
+			msg = response_message(result) or "账户存在异常行为"
+			raise AccountRiskError(
+				f"BOSS 直聘风控拦截 (code {code}): {msg}。"
+				f"当前浏览器模式: {mode}。"
+				f"建议：停止自动化访问并回到 BOSS 直聘官方页面手动处理。",
+				is_cdp=is_cdp,
+			)
+		if code == endpoints.CODE_STOKEN_EXPIRED and classify_code_37(result) == "environment_risk":
+			msg = response_message(result) or "未知 code 37 响应"
+			raise EnvironmentRiskError(
+				f"BOSS 直聘访问环境风控 (code {code}): {msg}。"
+				f"当前浏览器模式: {mode}。已停止且未刷新或重试；"
+				"请保留当前专用 profile，在官方页面确认后降低访问频率。",
+				is_cdp=is_cdp,
+			)
+		return result
 
 	@staticmethod
 	def _bridge_is_connected() -> bool:

@@ -195,6 +195,7 @@ module = [
 	"boss_agent_cli.api.httpx_helpers",
 	"boss_agent_cli.api.endpoints",
 	"boss_agent_cli.api.endpoints_loader",
+	"boss_agent_cli.api.zhipin_errors",
 	"boss_agent_cli.commands.stats",
 	"boss_agent_cli.commands.chat_summary",
 	"boss_agent_cli.cache.store",

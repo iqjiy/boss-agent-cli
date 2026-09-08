@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from boss_agent_cli.api.recruiter_endpoints import BASE_URL
-from boss_agent_cli.api.zhipin_errors import classify_code_37
+from boss_agent_cli.api.recruiter_endpoints import BASE_URL, CODE_STOKEN_EXPIRED
+from boss_agent_cli.api.zhipin_errors import classify_code_37, response_message
 from boss_agent_cli.platforms.recruiter_base import RecruiterPlatform
 
 if TYPE_CHECKING:
@@ -50,8 +50,8 @@ class BossRecruiterPlatform(RecruiterPlatform):
 
 	def parse_error(self, response: dict[str, Any]) -> tuple[str, str]:
 		code = response.get("code")
-		message = str(response.get("message") or response.get("zpData") or "")
-		if code == 37:
+		message = response_message(response)
+		if code == CODE_STOKEN_EXPIRED:
 			unified = "TOKEN_REFRESH_FAILED" if classify_code_37(response) == "token_expired" else "ENVIRONMENT_RISK"
 			return unified, message
 		unified = _ERROR_CODE_MAP.get(code, "UNKNOWN") if isinstance(code, int) else "UNKNOWN"

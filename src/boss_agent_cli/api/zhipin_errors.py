@@ -26,10 +26,16 @@ _TOKEN_EXPIRED_MARKERS = (
 
 
 def response_message(response: dict[str, Any]) -> str:
-	# `msg` 兜底沿自通用信封解析惯例（platforms/base.py 读 message/msg/error/zpData），
-	# 抓包记录（docs/research/platforms/zhipin.md）未见 BOSS 使用该键；
-	# 为与 #382 行为对齐而保留，未知文案最终 fail closed 为环境风险。
-	return str(response.get("message") or response.get("msg") or "")
+	# 兜底链与 platforms/base.py 的通用信封解析对齐（message/msg/error/zpData），
+	# 保证 code 37 短路分支与 _classify_platform_error 取到同一份文案，
+	# 避免 {"code": 37, "zpData": "..."} 这类响应的信封 message 退化为空串。
+	return str(
+		response.get("message")
+		or response.get("msg")
+		or response.get("error")
+		or response.get("zpData")
+		or ""
+	)
 
 
 def classify_code_37(response: dict[str, Any]) -> Code37Kind:

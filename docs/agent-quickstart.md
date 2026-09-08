@@ -98,7 +98,7 @@ boss hr jobs list
 - `boss hr <subcommand>` 会自动切到 recruiter 角色，不需要额外推断 `--role`
 - 求职者与招聘者两端都遵守同一套 `stdout JSON / stderr 日志` 契约
 - 当前 `hr` 只支持 `zhipin-recruiter`；智联招聘者侧自动化请使用 `boss --platform zhilian --role recruiter agent ...`
-- 平台返回 `ACCOUNT_RISK` 或 `RATE_LIMITED` 时停止当前批次，按 `error.recovery_action` 处理，不要无界换通道重试
+- 平台返回 `ACCOUNT_RISK`、`RATE_LIMITED` 或 `ENVIRONMENT_RISK` 时停止当前批次，按 `error.recovery_action` 处理，不要无界换通道重试
 
 ## 3) 失败恢复与排障
 
@@ -113,6 +113,7 @@ boss status
 
 常见恢复动作：
 - `AUTH_REQUIRED` / `AUTH_EXPIRED` / `TOKEN_REFRESH_FAILED`：重新执行 `boss login`
+- `ENVIRONMENT_RISK`：停止自动化访问；保留当前专用 profile，在官方页面确认并降低访问频率
 - `wt2` 存在但 `stoken` 缺失：通常为部分登录态；使用 Chrome CDP 远程调试端口后运行 `boss login --cdp`，或重新执行 `boss login`
 - `RATE_LIMITED`：等待后重试
 - `NOT_SUPPORTED`：切换 schema catalog 中支持该 goal 的平台或 workflow

@@ -31,7 +31,7 @@ def parse_error(self, response: dict) -> tuple[str, str]  # (normalized error co
 Examples of platform-specific differences:
 - BOSS Zhipin: `code == 0` means success and the payload lives under `zpData`
 - Zhilian: `code == 200` means success and the payload lives under `data`
-- Raw platform errors are normalized into shared enums such as `AUTH_EXPIRED`, `RATE_LIMITED`, `ACCOUNT_RISK`, `TOKEN_REFRESH_FAILED`, and `UNKNOWN`
+- Raw platform errors are normalized into shared enums such as `AUTH_EXPIRED`, `RATE_LIMITED`, `ACCOUNT_RISK`, `TOKEN_REFRESH_FAILED`, `ENVIRONMENT_RISK`, and `UNKNOWN`
 
 ### 3. P0 read-only capabilities
 

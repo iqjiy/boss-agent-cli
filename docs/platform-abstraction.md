@@ -27,7 +27,7 @@ def parse_error(self, response: dict) -> tuple[str, str]  # (统一错误码, �
 不同平台的差异举例：
 - BOSS 直聘：`code == 0` 表示成功，数据在 `zpData` key
 - 智联招聘：`code == 200` 表示成功，数据在 `data` key
-- 错误码映射到统一枚举：`AUTH_EXPIRED / RATE_LIMITED / ACCOUNT_RISK / TOKEN_REFRESH_FAILED / UNKNOWN`
+- 错误码映射到统一枚举：`AUTH_EXPIRED / RATE_LIMITED / ACCOUNT_RISK / TOKEN_REFRESH_FAILED / ENVIRONMENT_RISK / UNKNOWN`
 
 ### 3. P0 只读能力（抽象方法，强制实现）
 ```python

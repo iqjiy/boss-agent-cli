@@ -4,13 +4,13 @@
 
 ## [Unreleased]
 
-### Breaking Changed
+### Changed（含 Breaking Change）
 - **code 37 改为按响应语境分类（对外契约变更）。** 此前所有 code 37 一律全局映射为 `TOKEN_REFRESH_FAILED`
   （`recoverable=true`，恢复动作 `boss login`）。现在只有文案明确指向 token/stoken 过期的 code 37 保持该行为；
   环境风险文案及语义不明确的 code 37 一律发新的 `ENVIRONMENT_RISK`（`recoverable=false`），立即停止且不刷新、
-  不重试、不提示重新登录。候选人与招聘者的 httpx 刷新判定、浏览器通道和平台 adapter 使用同一分类器
-  （`boss_agent_cli.api.zhipin_errors.classify_code_37`）。按错误码分支的下游 Agent 请新增 `ENVIRONMENT_RISK`
-  终止分支，绝不对其自动登录/刷新/重试。
+  不重试、不提示重新登录。候选人与招聘者的 httpx 刷新判定与平台 adapter 使用同一分类器
+  （`boss_agent_cli.api.zhipin_errors.classify_code_37`）；候选人浏览器通道额外在环境风控上直接终止。
+  按错误码分支的下游 Agent 请新增 `ENVIRONMENT_RISK` 终止分支，绝不对其自动登录/刷新/重试。
 
 ### Added
 - **公开职位 lid 与浏览器职位卡片接口。** `JobItem` 新增 `lid` 字段（解析自列表响应

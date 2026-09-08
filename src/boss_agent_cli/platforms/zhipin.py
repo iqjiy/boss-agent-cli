@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from boss_agent_cli.api.endpoints import BASE_URL
-from boss_agent_cli.api.zhipin_errors import classify_code_37
+from boss_agent_cli.api.endpoints import BASE_URL, CODE_STOKEN_EXPIRED
+from boss_agent_cli.api.zhipin_errors import classify_code_37, response_message
 from boss_agent_cli.platforms.base import Platform
 
 if TYPE_CHECKING:
@@ -45,10 +45,9 @@ class BossPlatform(Platform):
 		return response.get("zpData")
 
 	def parse_error(self, response: dict[str, Any]) -> tuple[str, str]:
-		if response.get("code") == 37:
+		if response.get("code") == CODE_STOKEN_EXPIRED:
 			code = "TOKEN_REFRESH_FAILED" if classify_code_37(response) == "token_expired" else "ENVIRONMENT_RISK"
-			message = str(response.get("message") or response.get("msg") or "")
-			return code, message
+			return code, response_message(response)
 		return self._classify_platform_error(response, _ERROR_CODE_MAP)
 
 	# ── P0 只读委托 ─────────────────────────────────────
