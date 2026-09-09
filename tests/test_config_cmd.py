@@ -123,6 +123,22 @@ def test_config_set_operating_mode_validates_choice(tmp_path):
 	assert parsed["error"]["code"] == "INVALID_PARAM"
 
 
+def test_config_set_browser_source_validates_choice(tmp_path):
+	"""browser_source 进 _CONFIG_CHOICES：合法值可设，非法值拒绝（且 reset 不被拦）。"""
+	code, parsed = _invoke("config", "set", "browser_source", "stored-cookie", tmp_path=tmp_path)
+	assert code == 0
+	assert parsed["data"]["value"] == "stored-cookie"
+
+	code, parsed = _invoke("config", "set", "browser_source", "cdp", tmp_path=tmp_path)
+	assert code == 1
+	assert parsed["error"]["code"] == "INVALID_PARAM"
+
+	# 合法值写入后，reset 必须能正常恢复默认（不被 group callback 拦成 INVALID_PARAM）。
+	code, parsed = _invoke("config", "reset", "browser_source", tmp_path=tmp_path)
+	assert code == 0
+	assert parsed["data"]["value"] == "auto"
+
+
 def test_parse_value_int_from_default_type():
 	"""_parse_value 按 int 默认值类型转换输入。"""
 	from boss_agent_cli.commands.config_cmd import _parse_value

@@ -581,11 +581,24 @@ def handle_auth_errors(command_name: str) -> Callable[[Callable[..., Any]], Call
 		@wraps(func)
 		def wrapper(ctx: Any, *args: Any, **kwargs: Any) -> Any:
 			from boss_agent_cli.api.browser_client import RecruiterChatTabRequired
-			from boss_agent_cli.api.browser_source import BrowserSourceUnavailable
+			from boss_agent_cli.api.browser_source import BrowserSourceUnavailable, BrowserSourceUnsupported
 			from boss_agent_cli.api.client import PlatformRiskError
 			from boss_agent_cli.auth.manager import AuthRequired, TokenRefreshFailed
 			try:
 				return func(ctx, *args, **kwargs)
+			except BrowserSourceUnsupported as e:
+				# recoverable / recovery_action 以真源契约为准，不覆盖；
+				# 针对浏览器来源的具体建议走 hints.operator_actions。
+				recoverable, not_supported_recovery = error_contract_for_code("NOT_SUPPORTED")
+				handle_error_output(
+					ctx, command_name, code="NOT_SUPPORTED",
+					message=str(e),
+					recoverable=recoverable,
+					recovery_action=not_supported_recovery,
+					hints={"operator_actions": [
+						"该平台没有浏览器通道，改用默认 --browser-source auto 或切换到 zhipin",
+					]},
+				)
 			except BrowserSourceUnavailable as e:
 				hints: dict[str, list[str]] = {}
 				if e.policy.operator_actions:

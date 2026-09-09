@@ -28,7 +28,7 @@ from boss_agent_cli.search_filters import SearchFilterCriteria, resolve_welfare_
 from boss_agent_cli.wizard.models import StepResult, WorkflowStatus
 from boss_agent_cli.wizard.runner import Action, WorkflowActionError, WorkflowControl
 
-PlatformFactory = Callable[[str, AuthManager, tuple[float, float], str | None], Any]
+PlatformFactory = Callable[[str, AuthManager, tuple[float, float], str | None, str | None], Any]
 
 
 @dataclass(frozen=True)
@@ -39,6 +39,7 @@ class ActionContext:
 	logger: Logger
 	delay: tuple[float, float] = (1.5, 3.0)
 	cdp_url: str | None = None
+	browser_source: str | None = None
 	config: Mapping[str, Any] | None = None
 	candidate_factory: PlatformFactory | None = None
 	recruiter_factory: PlatformFactory | None = None
@@ -52,22 +53,24 @@ class ActionContext:
 
 	def candidate_platform(self) -> Any:
 		if self.candidate_factory:
-			return self.candidate_factory(self.platform, self.auth(), self.delay, self.cdp_url)
+			return self.candidate_factory(self.platform, self.auth(), self.delay, self.cdp_url, self.browser_source)
 		return build_platform_instance(
 			self.platform,
 			self.auth(),
 			delay=self.delay,
 			cdp_url=self.cdp_url,
+			browser_source=self.browser_source,
 		)
 
 	def recruiter_platform(self) -> Any:
 		if self.recruiter_factory:
-			return self.recruiter_factory(self.platform, self.auth(), self.delay, self.cdp_url)
+			return self.recruiter_factory(self.platform, self.auth(), self.delay, self.cdp_url, self.browser_source)
 		return build_recruiter_platform_instance(
 			self.platform,
 			self.auth(),
 			delay=self.delay,
 			cdp_url=self.cdp_url,
+			browser_source=self.browser_source,
 		)
 
 

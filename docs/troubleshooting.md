@@ -139,6 +139,20 @@ if (-not $chrome) { throw "Google Chrome executable was not found" }
 boss --cdp-url http://localhost:9222 login --cdp
 ```
 
+## 锁定浏览器通道：`--browser-source`
+
+`--browser-source stored-cookie --cdp-url <地址>` 是 fail-closed 的严格模式：把浏览器通道锁定为你指定的那个 CDP 端点并禁止降级到 Bridge 或 headless，不可用时立即返回 `CDP_UNAVAILABLE`。该端点可以是你日常 Chrome 的调试端口，也可以是长期复用的专用调试 profile——**它只保证「锁定通道」，不保证复用你日常浏览器的登录会话**。若你要的是后者，请用 `--browser-source existing-browser`。
+
+> 注：`CDP_UNAVAILABLE` 的 `recovery_action` 依上下文而定，信封里的值是权威值，`boss schema` 里声明的是默认建议。
+
+三类来源对比：
+
+| 来源 | 通道 | 读本地凭据 | 自动探测 9222 | 启动浏览器 | 失败错误码 |
+|---|---|---|---|---|---|
+| `auto`（默认） | Bridge→CDP→headless | 是 | 是 | 允许 | NETWORK_ERROR |
+| `existing-browser` | Bridge/CDP | 否 | 是 | 禁止 | BROWSER_SESSION_NOT_FOUND |
+| `stored-cookie` | 仅指定 CDP | 是 | 否 | 禁止 | CDP_UNAVAILABLE |
+
 ## 错误码与自动修复
 
 每个错误信封都带 `code`、`recoverable`、`recovery_action`，Agent 可程序化恢复。

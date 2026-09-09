@@ -127,7 +127,9 @@ class TestGetPlatformInstanceHelper:
 
 		with patch("boss_agent_cli.commands._platform.BossClient") as mock_client_cls:
 			get_platform_instance(ctx, auth)
-			mock_client_cls.assert_called_once_with(auth, delay=(2.0, 4.0), cdp_url="http://localhost:9222")
+			mock_client_cls.assert_called_once_with(
+				auth, delay=(2.0, 4.0), cdp_url="http://localhost:9222", browser_source="auto"
+			)
 
 	def test_helper_defaults_missing_platform_to_zhipin(self) -> None:
 		from boss_agent_cli.platforms import BossPlatform
@@ -166,6 +168,44 @@ class TestGetPlatformInstanceHelper:
 		assert isinstance(plat, QianchengPlatform)
 		mock_boss_client_cls.assert_not_called()
 		assert plat.client is None
+
+	def test_helper_passes_browser_source_to_client(self) -> None:
+		"""非默认来源必须显式透传给 BossClient。"""
+		from boss_agent_cli.commands._platform import get_platform_instance
+
+		ctx = MagicMock()
+		ctx.obj = {"platform": "zhipin", "delay": (0.0, 0.0), "cdp_url": None, "browser_source": "stored-cookie"}
+		auth = MagicMock()
+
+		with patch("boss_agent_cli.commands._platform.BossClient") as mock_client_cls:
+			get_platform_instance(ctx, auth)
+			mock_client_cls.assert_called_once_with(
+				auth, delay=(0.0, 0.0), cdp_url=None, browser_source="stored-cookie"
+			)
+
+	def test_helper_rejects_fail_closed_source_on_zhilian(self) -> None:
+		"""zhilian 没有浏览器通道：非 auto 来源必须抛 BrowserSourceUnsupported（→ NOT_SUPPORTED）。"""
+		from boss_agent_cli.api.browser_source import BrowserSourceUnsupported
+		from boss_agent_cli.commands._platform import get_platform_instance
+
+		ctx = MagicMock()
+		ctx.obj = {"platform": "zhilian", "delay": (0.0, 0.0), "cdp_url": None, "browser_source": "stored-cookie"}
+		auth = MagicMock()
+
+		with pytest.raises(BrowserSourceUnsupported):
+			get_platform_instance(ctx, auth)
+
+	def test_helper_allows_auto_source_on_zhilian(self) -> None:
+		"""auto 来源不触发浏览器通道守卫，zhilian 照常构造。"""
+		from boss_agent_cli.commands._platform import get_platform_instance
+
+		ctx = MagicMock()
+		ctx.obj = {"platform": "zhilian", "delay": (0.0, 0.0), "cdp_url": None, "browser_source": "auto"}
+		auth = MagicMock()
+
+		with patch("boss_agent_cli.commands._platform.ZhilianClient") as mock_zhilian:
+			get_platform_instance(ctx, auth)
+			mock_zhilian.assert_called_once_with(auth, delay=(0.0, 0.0), cdp_url=None)
 
 
 class TestQianchengPlaceholderContract:

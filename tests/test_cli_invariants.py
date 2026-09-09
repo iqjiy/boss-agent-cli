@@ -80,3 +80,32 @@ def test_failure_commands_emit_single_json_error_envelope(
 	assert isinstance(payload["error"]["recoverable"], bool)
 	assert "recovery_action" in payload["error"]
 	assert result.stderr == ""
+
+
+def _invoke_schema(tmp_path: Any, *extra_args: str) -> dict[str, Any]:
+	result = CliRunner().invoke(cli, ["--data-dir", str(tmp_path), *extra_args, "--json", "schema"])
+	assert result.exit_code == 0, result.output
+	return json.loads(result.output.strip())
+
+
+def test_browser_source_flag_is_exposed_in_schema(tmp_path: Any) -> None:
+	"""--browser-source 的字面量必须原样进 current_browser_source，不做映射。"""
+	payload = _invoke_schema(tmp_path, "--browser-source", "stored-cookie")
+	assert payload["data"]["current_browser_source"] == "stored-cookie"
+
+
+def test_browser_source_defaults_to_auto(tmp_path: Any) -> None:
+	payload = _invoke_schema(tmp_path)
+	assert payload["data"]["current_browser_source"] == "auto"
+
+
+def test_browser_source_reads_config_value(tmp_path: Any) -> None:
+	"""config.json 里的 browser_source 必须被读取（无需 CLI 显式传）。"""
+	(tmp_path / "config.json").write_text(json.dumps({"browser_source": "existing-browser"}), encoding="utf-8")
+	payload = _invoke_schema(tmp_path)
+	assert payload["data"]["current_browser_source"] == "existing-browser"
+
+
+def test_browser_source_rejects_unknown_value(tmp_path: Any) -> None:
+	result = CliRunner().invoke(cli, ["--data-dir", str(tmp_path), "--browser-source", "bridge", "--json", "schema"])
+	assert result.exit_code != 0
