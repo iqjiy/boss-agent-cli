@@ -45,10 +45,12 @@ def _build_client(
 	抛 ``TypeError`` 被兜底成 ``NETWORK_ERROR``。
 	"""
 	policy = resolve_policy(browser_source)
-	# 来源守卫先于占位平台分发：zhilian/qiancheng/51job 都没有浏览器通道，
-	# 非 auto 来源一律在此抛 BrowserSourceUnsupported，而不是由占位适配器返回
-	# 不带 recovery_action 的 NOT_SUPPORTED（消息与真源不符）。
-	if policy.fail_closed and name in {"zhilian", "qiancheng", "51job"}:
+	# 与 _recruiter_platform 同一写法：唯一有浏览器通道的是 zhipin（BossClient）。
+	# 任何其他平台配非 auto 来源都在此抛 BrowserSourceUnsupported（→ NOT_SUPPORTED），
+	# 而不是落到占位适配器返回不带 recovery_action 的 NOT_SUPPORTED，或因意外 kwarg
+	# 抛 TypeError 被兜底成 NETWORK_ERROR。守卫写成通用式（name != "zhipin"）而非名称
+	# 白名单，未来新增无浏览器通道的平台不会静默落到 BossClient。
+	if name != "zhipin" and policy.fail_closed:
 		raise BrowserSourceUnsupported(name, policy.name)
 	if name in {"qiancheng", "51job"}:
 		return None
