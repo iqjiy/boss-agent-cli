@@ -112,11 +112,23 @@
 - **复用已登录 CDP 会话并消除首次导航竞态。** `login --cdp` 现在跨所有 browser context
   按精确 hostname / cookie domain 校验搜索已有 BOSS 登录态（`wt2`/`at`）：命中时复用该
   context 与既有平台页签，不导航登录页、不轮询等待；cookie 中已含 `__zp_stoken__` 时
-  优先读取 cookie jar，仅在缺失且页面确认可加载后才做页面提取，导航卡住的页面不会被
-  evaluate（避免 patchright 永久挂起）。清理时只关闭本次调用新建的页面。API 浏览器
-  会话（`BrowserSession._try_connect`）新建 CDP 页面改为等待 `domcontentloaded`，
-  修复首次搜索出现 `execution context destroyed` 的竞态。#390 的导航超时/重试、
-  `_safe_user_agent`、`_warm_home_for_runtime` 与 cookie-jar 兜底全部保留。
+  优先读取 cookie jar，仅在缺失且页面经有界 `wait_for_load_state` 确认可加载后才做页面
+  提取。UA 采集按路径 gate：未登录时在已加载的登录页上提前采集（沿用 #390 顺序），复用
+  新建页签时在首页确认加载后采集，复用既有页签时与 stoken 共用同一次有界就绪检查——
+  导航卡住的页面 UA 与 stoken 都不会被 evaluate（避免 patchright 永久挂起）。清理时只
+  关闭本次调用新建的页面。智联未登录时复用既有 recruiter 页签不再被导航走；智联已登录
+  但无 recruiter 页签时新建页签也会回各自 home（修复 `x-zp-client-id` 在 about:blank 上
+  读取失效导致的 `TokenRefreshFailed`）。API 浏览器会话（`BrowserSession._try_connect`）
+  新建 CDP 页面改为等待 `domcontentloaded`，修复首次搜索出现 `execution context destroyed`
+  的竞态；并为该路径补「卡住不 evaluate」门禁——goto 超时不再被 `except` 吞掉后直接
+  `return True`，而是标记 `_page_ready=False`，`request()` 在 `evaluate(fetch)` 前先做有界
+  `wait_for_load_state` 恢复，仍不就绪则返回错误信封而非永久挂起（与 #390 同一规则）。
+  多 context 复用时在终端打出选中的 context 序号与「账号指纹」（登录态 cookie 值的不可逆
+  哈希前缀，不泄露 cookie），缓解多窗口/多 profile 下的账号歧义。
+  实测正常网络下 zhipin 首页 `domcontentloaded` 中位约 160ms（复用 context）/ 355ms（全新
+  context 冷启动），相对 `commit` 的增量在毫秒级，作为 strict-CDP 每次会话启动的必付成本
+  可接受。#390 的导航超时/重试、`_safe_user_agent`、`_warm_home_for_runtime` 与 cookie-jar
+  兜底全部保留。
 - 修复扫码登录在「首页预热」阶段卡住时永久挂起：BOSS 直聘首页在自动化下偶发长时间不完成加载，`page.goto` 超时后若仍对页面执行 `page.evaluate`（取 UA / stoken），patchright 会因执行上下文无法建立而无限阻塞，导致 `boss login` 卡死且不落盘凭证。现在 UA 改在已加载的登录页上提前采集；`_warm_home_for_runtime` 返回首页是否真正加载完成，仅在确认加载后才对页面 evaluate 提取 stoken，否则回退读取 cookie jar；并对首页导航超时增加「跳 `about:blank` 重置卡死导航后重试一次」，显著降低风控验证页/加载缓慢导致的 `Page.goto: Timeout 15000ms exceeded` 误报。`login_via_cdp` / `refresh_stoken` / `refresh_stoken_via_cdp` 同步加固；CDP 登录/刷新 stoken 也改为优先页面 evaluate、失败回退 cookie jar（安全验证跳转期间 `domcontentloaded` 可能未触发，但 `__zp_stoken__` 已写入 cookie jar）。
 - 修复 BOSS 收藏接口在 `isActive=true` 下仍混入失效职位时的静默误判：`favorites list` 现输出规范化 `job_status` 与状态计数，`favorites sync` 仅导入明确有效职位并报告 active/inactive/unknown 数量；缺失或未知状态不再默认有效。
 

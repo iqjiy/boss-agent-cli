@@ -144,6 +144,11 @@ boss --cdp-url http://localhost:9222 login --cdp
 只在找不到登录态时才打开登录页扫码。页签清理只作用于本次调用新建的页面，
 用户已打开的页签不会被关闭。
 
+复用时会在终端打出选中的 context 序号与「账号指纹」（登录态 cookie 值的不可逆
+哈希前缀，不泄露 cookie 本身），例如 `context 2/2，账号指纹 c26a7f01`。同时开多个
+浏览器窗口/无痕页或多个 profile 各登不同 BOSS 账号时，复用的是「第一个带登录态的
+context」；若指纹对应的账号不是你要的，请关闭多余窗口或只保留目标账号的登录态后重试。
+
 ## 错误码与自动修复
 
 每个错误信封都带 `code`、`recoverable`、`recovery_action`，Agent 可程序化恢复。

@@ -443,20 +443,76 @@ def test_try_connect_creates_page_when_no_open_zhipin_tab():
 	mock_browser.contexts = [mock_user_context]
 	session._pw.chromium.connect_over_cdp.return_value = mock_browser
 
-	# 回归断言：导航就绪必须发生在 _try_connect 返回之前（首次搜索不再撞上
-	# execution context destroyed）。
-	nav_order: list[str] = []
-	mock_new_page.goto.side_effect = lambda *a, **k: nav_order.append("goto")
-
 	result = session._try_connect("ws://localhost:9222/test")
 
 	assert result is True
 	assert session._own_page is True
 	mock_user_context.new_page.assert_called_once()
-	assert nav_order == ["goto"]  # goto 已在返回前完成
 	assert session._started is True
-	# 首次 CDP 页面必须等待 DOM 就绪，而不是 commit 级等待
+	# 首次 CDP 页面必须等待 DOM 就绪，而不是 commit 级等待（首次搜索不再撞上
+	# execution context destroyed）。
 	mock_new_page.goto.assert_called_once_with(HOME_URL, wait_until="domcontentloaded", timeout=_NAV_TIMEOUT_MS)
+
+
+def test_request_does_not_hang_when_new_page_navigation_stalled():
+	"""新建 CDP 页签 goto 超时（_page_ready=False）时，request() 不得对仍在导航的页面
+	evaluate（永久挂起，同 #390）；先有界恢复，仍卡住则返回错误信封。"""
+	session = BrowserSession(cookies={}, user_agent="")
+	session._pw = MagicMock()
+	mock_browser = MagicMock()
+	mock_ctx = MagicMock()
+	mock_ctx.pages = []
+	mock_new_page = MagicMock()
+	mock_ctx.new_page.return_value = mock_new_page
+	mock_browser.contexts = [mock_ctx]
+	session._pw.chromium.connect_over_cdp.return_value = mock_browser
+	mock_new_page.goto.side_effect = TimeoutError("Timeout 15000ms exceeded")
+
+	assert session._try_connect("ws://localhost:9222/test") is True
+	assert session._page_ready is False
+
+	# 页面仍卡住：request 返回错误信封，不调 evaluate
+	mock_new_page.wait_for_load_state.side_effect = TimeoutError("still stuck")
+	res = session.request("GET", "https://www.zhipin.com/wapi/zpgeek/search/joblist.json")
+	assert res["code"] == -1
+	mock_new_page.evaluate.assert_not_called()
+
+	# 页面恢复：有界 wait 成功后正常 evaluate，_page_ready 复位
+	mock_new_page.wait_for_load_state.side_effect = None
+	mock_new_page.wait_for_load_state.return_value = None
+	mock_new_page.evaluate.return_value = {"code": 0, "zpData": {}}
+	res2 = session.request("GET", "https://www.zhipin.com/wapi/zpgeek/search/joblist.json")
+	assert res2["code"] == 0
+
+
+def test_try_connect_resets_page_ready_on_reuse_after_prior_stall():
+	"""上一次尝试新建页签 goto 超时留下 _page_ready=False，下一次复用健康页签时
+	必须重置为 True——否则 request() 会对正常页签误跑 wait_for_load_state。"""
+	session = BrowserSession(cookies={}, user_agent="")
+	session._pw = MagicMock()
+
+	# 第一次：无 zhipin 页签 → 新建，goto 超时 → _page_ready=False
+	mock_browser1 = MagicMock()
+	ctx1 = MagicMock()
+	ctx1.pages = []
+	new_page = MagicMock()
+	ctx1.new_page.return_value = new_page
+	mock_browser1.contexts = [ctx1]
+	session._pw.chromium.connect_over_cdp.return_value = mock_browser1
+	new_page.goto.side_effect = TimeoutError("Timeout 15000ms exceeded")
+	assert session._try_connect("ws://localhost:9222/one") is True
+	assert session._page_ready is False
+
+	# 第二次：复用既有 zhipin 页签（不碰 _page_ready 的分支）→ 必须重置为 True
+	reused_page = _FakePage("https://www.zhipin.com/web/geek/job")
+	mock_browser2 = MagicMock()
+	ctx2 = MagicMock()
+	ctx2.pages = [reused_page]
+	mock_browser2.contexts = [ctx2]
+	session._pw.chromium.connect_over_cdp.return_value = mock_browser2
+	session._started = False  # 模拟新一轮连接
+	assert session._try_connect("ws://localhost:9222/two") is True
+	assert session._page_ready is True  # 复用健康页签不被上次残留污染
 
 
 def test_close_does_not_close_reused_user_page():

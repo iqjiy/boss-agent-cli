@@ -15,8 +15,6 @@ import time
 from pathlib import Path
 from types import TracebackType
 from typing import Any, cast
-from urllib.parse import urlparse
-
 from patchright.sync_api import sync_playwright
 
 from boss_agent_cli.api import endpoints
@@ -30,23 +28,11 @@ from boss_agent_cli.api.browser_source import (
 )
 from boss_agent_cli.api.throttle import RequestThrottle
 from boss_agent_cli.auth.browser import _DEFAULT_CDP_URL as CDP_DEFAULT_URL
+from boss_agent_cli.auth.browser import _is_zhipin_url
 
 HOME_URL = "https://www.zhipin.com/"
-_ZHIPIN_HOST = "zhipin.com"
 
-
-def _is_zhipin_url(url: str) -> bool:
-	"""精确 hostname 校验：仅 zhipin.com 或其子域名视为 BOSS 直聘页面。
-
-	刻意不用 ``"zhipin.com" in url`` 子串判断——伪造 host（如
-	``zhipin.com.evil.example``）或带该域名的查询串都能骗过子串检查
-	（CodeQL ``py/incomplete-url-substring-sanitization``）。
-	"""
-	host = urlparse(url).hostname
-	if host is None:
-		return False
-	host = host.rstrip(".").lower()
-	return host == _ZHIPIN_HOST or host.endswith(f".{_ZHIPIN_HOST}")
+# _is_zhipin_url 复用 auth.browser 的精确 hostname 校验（单一实现，避免三处漂移）。
 
 
 def _find_reusable_zhipin_page(context: Any) -> Any | None:
@@ -117,6 +103,10 @@ class BrowserSession:
 		self._is_cdp = False
 		self._own_context = False  # 是否由我们创建的 context（需要在 close 时清理）
 		self._own_page = True  # 是否由我们新建的 page（复用用户已开页签时为 False，close 不关它）
+		# 新建 CDP 页签的 goto 是否真正到达 domcontentloaded。复用页签/headless 路径
+		# 页面已就绪（默认 True）；仅 _try_connect 新建页签 goto 超时才置 False，
+		# request() 据此在 evaluate(fetch) 前做有界恢复，避免对仍在导航的页面挂起。
+		self._page_ready = True
 		self._logger = logger
 		self._bridge_client: Any = None
 		self._is_bridge = False
@@ -267,6 +257,9 @@ class BrowserSession:
 		login state and avoid creating extra browser state. Only creates a
 		new context when none exists.
 		"""
+		# 每次连接尝试都重置就绪标志：复用页签分支不碰 _page_ready，若上一次尝试
+		# 在新建页签 goto 超时留下 False，会污染本次复用的健康页签（review Finding）。
+		self._page_ready = True
 		try:
 			self._browser = self._pw.chromium.connect_over_cdp(url)
 			contexts = self._browser.contexts
@@ -321,8 +314,12 @@ class BrowserSession:
 				try:
 					self._page.goto(HOME_URL, wait_until="domcontentloaded", timeout=_NAV_TIMEOUT_MS)
 				except Exception:
-					pass  # 即使导航超时，页面 JS 环境已可用
-				page_label = "新建 page"
+					# 导航超时：页面可能仍在导航、执行上下文未建立。标记未就绪，
+					# 由 request() 在 evaluate 前有界恢复，避免永久挂起（同 #390）。
+					self._page_ready = False
+					page_label = "新建 page（首页未就绪）"
+				else:
+					page_label = "新建 page"
 			self._started = True
 			self._is_cdp = True
 			reuse_label = "复用用户 context" if not self._own_context else "新建 context"
@@ -444,6 +441,20 @@ class BrowserSession:
 			return cast("dict[str, Any]", result)
 
 		# Playwright 模式（CDP 或 headless）
+		# 新建 CDP 页签若 goto 超时（_page_ready=False），页面可能仍在导航、执行上下文
+		# 未建立；此时直接 evaluate(fetch) 会永久挂起（同 #390）。先做有界就绪恢复，
+		# 仍不就绪则返回错误信封而非挂起。
+		if not self._page_ready:
+			try:
+				self._page.wait_for_load_state("domcontentloaded", timeout=_NAV_TIMEOUT_MS)
+			except Exception:
+				return {
+					"code": -1,
+					"message": "页面导航未完成（CDP 首页加载超时），无法发起请求；请检查浏览器后重试",
+					"zpData": {},
+				}
+			else:
+				self._page_ready = True
 		result = self._page.evaluate(
 			"""
 			async ({method, url, params, data, referer}) => {
