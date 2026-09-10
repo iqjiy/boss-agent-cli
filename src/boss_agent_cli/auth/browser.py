@@ -274,7 +274,13 @@ def login_via_cdp(*, cdp_url: str | None = None, timeout: int = 120, platform: s
 				except Exception:
 					pass
 
-			print(f"[boss] 请在 Chrome 中扫码登录，等待中...（超时 {timeout}s）", file=sys.stderr)
+			# 智联复用既有页签未登录时不导航（保护用户页面状态），页面上没有可见的扫码入口，
+			# 提示「扫码」会误导且轮询必然超时；改为引导用户在既有页签内手动完成登录，
+			# 轮询 at 保持不变——用户在页签里登录后轮询即可接上，超时也是真实的超时。
+			if platform == "zhilian" and not created_page:
+				print(f"[boss] 请在已打开的智联页签中完成登录，等待中...（超时 {timeout}s）", file=sys.stderr)
+			else:
+				print(f"[boss] 请在 Chrome 中扫码登录，等待中...（超时 {timeout}s）", file=sys.stderr)
 
 			for i in range(timeout):
 				time.sleep(1)
@@ -328,8 +334,19 @@ def login_via_cdp(*, cdp_url: str | None = None, timeout: int = 120, platform: s
 				page_ready = True
 				ua = _safe_user_agent(page)
 
-		# 任何导航之后重新读取 cookie，不依赖早期快照
-		all_cookies = {c["name"]: c["value"] for c in _matching_cookies(ctx, cookie_domain=cookie_domain)}
+		# 任何导航之后重新读取 cookie，不依赖早期快照。这里是登录成功后的「最终读取」，
+		# 不能用吞异常的 _matching_cookies：ctx.cookies() 抛错（如 CDP target closed）若返回
+		# []，会被当作 cookies={} 的「成功」结果落盘（AuthManager.login 不校验主 cookie）。
+		# 故直接 ctx.cookies() 让异常传播，并读完后校验主 cookie 存在，否则 raise。
+		all_cookies = {
+			c["name"]: c["value"]
+			for c in ctx.cookies()
+			if _is_cookie_domain(c.get("domain", ""), cookie_domain)
+		}
+		if not all_cookies.get(success_cookie):
+			raise RuntimeError(
+				f"登录态校验失败：最终读取未拿到主 cookie（{success_cookie}），凭证不落盘"
+			)
 		if platform == "zhipin":
 			if created_page:
 				# 首页成功加载才对其 evaluate 提取 stoken；否则回退读取 cookie jar
@@ -345,7 +362,9 @@ def login_via_cdp(*, cdp_url: str | None = None, timeout: int = 120, platform: s
 			# cookie 里 x-zp-client-id 非空才直接用（空串也要落到 localStorage 兜底）；
 			# 复用既有页签需页面就绪，否则在卡住的页面上 evaluate 会永久挂起（同 #390）。
 			x_zp_client_id = all_cookies.get("x-zp-client-id") or ""
-			if not x_zp_client_id and (created_page or page_ready):
+			# 新建页签看 home_loaded（首页卡住时不对卡住页面 evaluate），复用既有页签看 page_ready；
+			# created_page 一短路就无视 home_loaded 会对卡住页面 evaluate 读 localStorage（同 #390 挂起）。
+			if not x_zp_client_id and (home_loaded if created_page else page_ready):
 				x_zp_client_id = _extract_zhilian_client_id(page)
 		else:
 			x_zp_client_id = ""
