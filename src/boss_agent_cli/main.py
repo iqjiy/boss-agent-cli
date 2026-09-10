@@ -90,7 +90,9 @@ def cli(ctx: click.Context, data_dir: str, delay: str | None, cdp_url: str | Non
 	ctx.obj["logger"] = Logger(level)
 	ctx.obj["cdp_url"] = cdp_url or cfg.get("cdp_url")
 
-	resolved_browser_source = browser_source or cfg.get("browser_source") or "auto"
+	# 归一化（大小写/首尾空白）后再校验，与下游 resolve_policy 的 .strip().lower() 一致，
+	# 避免 config.json 里 "Auto" / " stored-cookie " 这类值被 CLI 拒绝、策略层却接受的不一致。
+	resolved_browser_source = (browser_source or cfg.get("browser_source") or "auto").strip().lower()
 	if resolved_browser_source not in BROWSER_SOURCES:
 		raise click.BadParameter(
 			f"unknown browser source {resolved_browser_source!r}, supported: {', '.join(BROWSER_SOURCES)}",
