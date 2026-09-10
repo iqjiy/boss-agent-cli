@@ -207,6 +207,19 @@ class TestGetPlatformInstanceHelper:
 			get_platform_instance(ctx, auth)
 			mock_zhilian.assert_called_once_with(auth, delay=(0.0, 0.0), cdp_url=None)
 
+	def test_helper_rejects_fail_closed_source_on_qiancheng(self) -> None:
+		"""qiancheng 占位平台同样没有浏览器通道：非 auto 来源必须先抛 BrowserSourceUnsupported，
+		而不是落到占位适配器返回不带 recovery_action 的 NOT_SUPPORTED。"""
+		from boss_agent_cli.api.browser_source import BrowserSourceUnsupported
+		from boss_agent_cli.commands._platform import get_platform_instance
+
+		ctx = MagicMock()
+		ctx.obj = {"platform": "qiancheng", "delay": (0.0, 0.0), "cdp_url": None, "browser_source": "stored-cookie"}
+		auth = MagicMock()
+
+		with pytest.raises(BrowserSourceUnsupported):
+			get_platform_instance(ctx, auth)
+
 
 class TestQianchengPlaceholderContract:
 	"""51job 占位平台必须保持可发现、只读安全且统一 NOT_SUPPORTED。"""

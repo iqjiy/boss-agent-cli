@@ -99,6 +99,30 @@ class TestHandleAuthErrors:
 			POLICIES["existing-browser"].operator_actions
 		)
 
+	def test_browser_source_unsupported_uses_not_supported_contract(self):
+		"""BrowserSourceUnsupported → NOT_SUPPORTED：recoverable / recovery_action 来自真源契约，
+		不被硬编码覆盖；针对来源的建议放进 hints.operator_actions。"""
+		from boss_agent_cli.api.browser_source import BrowserSourceUnsupported
+
+		ctx = MagicMock()
+		ctx.obj = {"json_output": True}
+
+		@handle_auth_errors("search")
+		def impl(ctx):
+			raise BrowserSourceUnsupported("zhilian", "stored-cookie")
+
+		with patch("boss_agent_cli.display.handle_error_output") as mock_err:
+			impl(ctx)
+
+		kwargs = mock_err.call_args.kwargs
+		assert kwargs["code"] == "NOT_SUPPORTED"
+		# 与 SCHEMA_DATA["error_codes"]["NOT_SUPPORTED"] 真源一致
+		assert kwargs["recoverable"] is True
+		assert kwargs["recovery_action"] == "切换平台或调整命令参数后重试"
+		assert kwargs["hints"]["operator_actions"] == [
+			"该平台没有浏览器通道，改用默认 --browser-source auto 或切换到 zhipin",
+		]
+
 	def test_auth_required(self):
 		from boss_agent_cli.auth.manager import AuthRequired
 		ctx = MagicMock()
