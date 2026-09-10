@@ -107,6 +107,19 @@ def _is_cookie_domain(domain: str, expected_domain: str) -> bool:
 	return normalized == expected or normalized.endswith(f".{expected}")
 
 
+def _ensure_page_evaluable(page: Any) -> bool:
+	"""有界确认页面可对 ``page.evaluate``（停在未完成导航时 evaluate 会永久挂起，#390 规则）。
+
+	返回 True 表示已就绪（可安全 evaluate）；False 表示有界等待超时，调用方须容忍并跳过
+	页面提取。统一三处「有界 wait_for_load_state → 就绪门禁」的重复逻辑。
+	"""
+	try:
+		page.wait_for_load_state("domcontentloaded", timeout=_NAV_TIMEOUT_MS)
+	except Exception:
+		return False
+	return True
+
+
 def _matching_cookies(context: Any, *, cookie_domain: str) -> list[dict[str, Any]]:
 	try:
 		return [
@@ -284,7 +297,11 @@ def login_via_cdp(*, cdp_url: str | None = None, timeout: int = 120, platform: s
 
 			for i in range(timeout):
 				time.sleep(1)
-				cookies = _matching_cookies(ctx, cookie_domain=cookie_domain)
+				# 裸 ctx.cookies() 让异常传播：轮询中途 CDP target 死掉时立即报真实连接错误，
+				# 而不是被吞成 [] 继续空转到超时，误报成「扫码超时」（与最终读取同一规则）。
+				cookies = [
+					c for c in ctx.cookies() if _is_cookie_domain(c.get("domain", ""), cookie_domain)
+				]
 				if any(c.get("name") == success_cookie and c.get("value") for c in cookies):
 					print("[boss] 检测到登录成功！", file=sys.stderr)
 					break
@@ -305,13 +322,8 @@ def login_via_cdp(*, cdp_url: str | None = None, timeout: int = 120, platform: s
 			# 未登录：登录页 goto 用 wait_until="commit"，不保证执行上下文就绪；扫码轮询
 			# 在 cookie 出现时即 break，页面可能仍在导航。采 UA 前做有界就绪确认，卡住则
 			# 容忍 UA 为空、不挂起。复用既有页签时（created_page=False）这里已确认就绪。
-			try:
-				page.wait_for_load_state("domcontentloaded", timeout=_NAV_TIMEOUT_MS)
-			except Exception:
-				page_ready = False
-			else:
-				page_ready = True
-				ua = _safe_user_agent(page)
+			page_ready = _ensure_page_evaluable(page)
+			ua = _safe_user_agent(page) if page_ready else ""
 			if created_page or platform != "zhilian":
 				home_loaded = _warm_home_for_runtime(page, home_url, stage="登录后回到首页")
 			else:
@@ -326,13 +338,8 @@ def login_via_cdp(*, cdp_url: str | None = None, timeout: int = 120, platform: s
 		else:
 			# 复用既有平台页签（已预先登录）：不导航，避免打断用户页面；有界确认就绪后采 UA。
 			home_loaded = False
-			try:
-				page.wait_for_load_state("domcontentloaded", timeout=_NAV_TIMEOUT_MS)
-			except Exception:
-				page_ready = False
-			else:
-				page_ready = True
-				ua = _safe_user_agent(page)
+			page_ready = _ensure_page_evaluable(page)
+			ua = _safe_user_agent(page) if page_ready else ""
 
 		# 任何导航之后重新读取 cookie，不依赖早期快照。这里是登录成功后的「最终读取」，
 		# 不能用吞异常的 _matching_cookies：ctx.cookies() 抛错（如 CDP target closed）若返回
@@ -424,7 +431,10 @@ def login_via_browser(*, timeout: int = 120, platform: str = "zhipin") -> dict[s
 			# 也通过 cookie 检测（覆盖 API 匹配不上的情况）
 			try:
 				cookies_list = context.cookies()
-				if any(c["name"] == success_cookie and cookie_domain in c.get("domain", "") for c in cookies_list):
+				if any(
+					c["name"] == success_cookie and _is_cookie_domain(c.get("domain", ""), cookie_domain)
+					for c in cookies_list
+				):
 					login_detected = True
 					break
 			except Exception:
@@ -445,7 +455,9 @@ def login_via_browser(*, timeout: int = 120, platform: str = "zhipin") -> dict[s
 		home_loaded = _warm_home_for_runtime(page, home_url, stage="登录后回到首页")
 
 		cookies_list = context.cookies()
-		cookies = {c["name"]: c["value"] for c in cookies_list if cookie_domain in c.get("domain", "")}
+		cookies = {
+			c["name"]: c["value"] for c in cookies_list if _is_cookie_domain(c.get("domain", ""), cookie_domain)
+		}
 		if platform == "zhipin":
 			# 首页成功加载才对其 evaluate 提取 stoken；否则回退到 cookie jar，
 			# 避免页面卡在导航中导致 page.evaluate 永久挂起

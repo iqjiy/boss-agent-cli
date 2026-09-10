@@ -86,6 +86,26 @@ def test_login_via_cdp_stops_playwright_on_timeout(mock_sleep, mock_probe_cdp):
 
 @patch("boss_agent_cli.auth.browser.probe_cdp", return_value="ws://localhost/devtools/browser")
 @patch("boss_agent_cli.auth.browser.time.sleep", return_value=None)
+def test_login_via_cdp_poll_propagates_cdp_death(mock_sleep, mock_probe_cdp):
+	"""扫码轮询中途 CDP target 死掉：必须立即抛真实连接错误，而不是吞成 [] 空转到超时。
+
+	回归 code-review Finding：轮询循环若用吞异常的 _matching_cookies（except: return []），
+	会在浏览器已关闭后继续空转 timeout 秒，最终误报「扫码超时」——用户对着不存在的浏览器
+	白等。轮询应与最终读取同样让 ctx.cookies() 异常传播。
+	"""
+	mock_context = MagicMock()
+	mock_context.pages = []
+	# 登录检测阶段未命中，进入轮询后 cookies() 抛错（CDP target closed）
+	mock_context.cookies.side_effect = RuntimeError("CDP target closed")
+	mock_launcher, _, _ = _mock_cdp_playwright(mock_context)
+
+	with patch("boss_agent_cli.auth.browser.sync_playwright", return_value=mock_launcher):
+		with pytest.raises(RuntimeError, match="CDP target closed"):
+			login_via_cdp(timeout=120, platform="zhipin")
+
+
+@patch("boss_agent_cli.auth.browser.probe_cdp", return_value="ws://localhost/devtools/browser")
+@patch("boss_agent_cli.auth.browser.time.sleep", return_value=None)
 def test_login_via_cdp_tolerates_user_agent_extraction_failure(mock_sleep, mock_probe_cdp):
 	mock_context = MagicMock()
 	mock_context.cookies.side_effect = [
