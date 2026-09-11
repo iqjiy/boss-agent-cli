@@ -13,6 +13,15 @@
   按错误码分支的下游 Agent 请新增 `ENVIRONMENT_RISK` 终止分支，绝不对其自动登录/刷新/重试。
 
 ### Added
+- **公开 `--browser-source` 浏览器来源选项**（取值 `auto` / `existing-browser` / `stored-cookie`，默认
+  `auto` 行为不变）。`stored-cookie` 为 fail-closed 严格模式：只连接 `--cdp-url` 指定的 CDP 端点，
+  不自动探测 `localhost:9222`/`DevToolsActivePort`、不降级 Bridge/headless、空浏览器不新建 context
+  注入 Cookie，不可用即发 `CDP_UNAVAILABLE`；`existing-browser` 只复用现有浏览器（Bridge/CDP），
+  不读本地凭据、不启动浏览器，失败发 `BROWSER_SESSION_NOT_FOUND`。stoken 静默刷新同样遵守该策略
+  （#418）。CLI / config / `boss schema` / MCP / wizard 全链路透传；`schema` 的 `global_options`
+  声明该选项并标注 `stability: experimental`，输出带 `current_browser_source`。非 `auto` 来源用于
+  无浏览器通道的平台（zhilian/qiancheng/51job）时返回 `NOT_SUPPORTED`。由 @iqjiy 提出并发现相关问题，
+  策略表与契约见 Issue #387 / PR #410。
 - **公开职位 lid 与浏览器职位卡片接口。** `JobItem` 新增 `lid` 字段（解析自列表响应
   `raw.lid`，缺失时为空串，并随 `to_dict()` 序列化）——取 JD 全文需要 `securityId` + `lid`
   两个参数，此前走 CLI 的调用方拿不到 `lid`。`BossClient` 新增 `job_card_browser(security_id, lid)`，

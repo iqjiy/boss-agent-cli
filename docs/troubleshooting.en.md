@@ -160,6 +160,20 @@ windows / incognito pages, or several profiles each logged into a different BOSS
 the reused context is the first one holding a login session. If the fingerprint is not the
 account you want, close the extra windows or keep only the target account logged in, then retry.
 
+## Locking the browser channel: `--browser-source`
+
+`--browser-source stored-cookie --cdp-url <addr>` is a fail-closed strict mode: it locks the browser channel to the exact CDP endpoint you specify and forbids falling back to Bridge or headless, returning `CDP_UNAVAILABLE` immediately when unavailable. The endpoint can be your daily Chrome's debug port or a long-lived dedicated debug profile — **it only guarantees "locked channel", not reuse of your daily browser's login session**. For the latter, use `--browser-source existing-browser`.
+
+> Note: the `recovery_action` for `CDP_UNAVAILABLE` depends on context; the envelope value is authoritative, and the value declared in `boss schema` is the default suggestion.
+
+Comparison of the three sources:
+
+| Source | Channels | Reads stored credentials | Auto-probes :9222 | Launches browser | Failure code |
+|---|---|---|---|---|---|
+| `auto` (default) | Bridge→CDP→headless | yes | yes | allowed | NETWORK_ERROR |
+| `existing-browser` | Bridge/CDP | no | yes | forbidden | BROWSER_SESSION_NOT_FOUND |
+| `stored-cookie` | specified CDP only | yes | no | forbidden | CDP_UNAVAILABLE |
+
 ## Search / API errors
 
 ### `code 36` / `ACCOUNT_RISK`

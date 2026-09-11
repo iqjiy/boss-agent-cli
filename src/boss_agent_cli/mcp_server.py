@@ -90,6 +90,7 @@ def _configure_boss_invocation(
 	data_dir: str | None = None,
 	platform: str | None = None,
 	role: str | None = None,
+	browser_source: str | None = None,
 ) -> None:
 	"""Configure global flags passed from the MCP host to the underlying boss CLI."""
 	global _BOSS_BIN, _BOSS_GLOBAL_ARGS
@@ -101,6 +102,8 @@ def _configure_boss_invocation(
 		args.extend(["--platform", platform])
 	if role:
 		args.extend(["--role", role])
+	if browser_source:
+		args.extend(["--browser-source", browser_source])
 	_BOSS_GLOBAL_ARGS = args
 
 
@@ -260,6 +263,12 @@ def _parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
 	parser.add_argument("--data-dir", default=None, help="传给 boss CLI 的数据目录，用于项目级状态隔离")
 	parser.add_argument("--platform", default=None, help="传给 boss CLI 的默认平台，如 zhilian 或 zhipin")
 	parser.add_argument("--role", choices=("candidate", "recruiter"), default=None, help="传给 boss CLI 的默认角色")
+	parser.add_argument(
+		"--browser-source",
+		choices=("auto", "existing-browser", "stored-cookie"),
+		default=None,
+		help="传给 boss CLI 的浏览器通道来源（默认 auto）",
+	)
 	return parser.parse_args(argv)
 
 
@@ -270,6 +279,7 @@ def run(argv: list[str] | None = None) -> None:
 		data_dir=args.data_dir,
 		platform=args.platform,
 		role=args.role,
+		browser_source=args.browser_source,
 	)
 	if args.transport == "stdio":
 		asyncio.run(main())

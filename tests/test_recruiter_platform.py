@@ -217,8 +217,8 @@ def test_recruiter_instance_defaults_to_zhipin_and_passes_delay_and_cdp(monkeypa
 	captured: dict = {}
 
 	class _Client:
-		def __init__(self, auth, *, delay, cdp_url):
-			captured.update(auth=auth, delay=delay, cdp_url=cdp_url)
+		def __init__(self, auth, *, delay, cdp_url, browser_source=None):
+			captured.update(auth=auth, delay=delay, cdp_url=cdp_url, browser_source=browser_source)
 
 	monkeypatch.setattr("boss_agent_cli.commands._recruiter_platform.BossRecruiterClient", _Client)
 	auth = MagicMock()
@@ -228,14 +228,15 @@ def test_recruiter_instance_defaults_to_zhipin_and_passes_delay_and_cdp(monkeypa
 	assert captured["auth"] is auth
 	assert captured["delay"] == (2.0, 4.0)
 	assert captured["cdp_url"] == "http://localhost:9222"
+	assert captured["browser_source"] == "auto"
 
 
 def test_recruiter_instance_falls_back_to_default_delay_when_ctx_is_empty(monkeypatch):
 	captured: dict = {}
 
 	class _Client:
-		def __init__(self, auth, *, delay, cdp_url):
-			captured.update(delay=delay, cdp_url=cdp_url)
+		def __init__(self, auth, *, delay, cdp_url, browser_source=None):
+			captured.update(delay=delay, cdp_url=cdp_url, browser_source=browser_source)
 
 	monkeypatch.setattr("boss_agent_cli.commands._recruiter_platform.BossRecruiterClient", _Client)
 	get_recruiter_platform_instance(SimpleNamespace(obj=None), MagicMock())
@@ -247,3 +248,27 @@ def test_recruiter_instance_falls_back_to_default_delay_when_ctx_is_empty(monkey
 def test_recruiter_instance_rejects_platform_without_recruiter_adapter():
 	with pytest.raises(ValueError):
 		get_recruiter_platform_instance(_ctx(platform="zhilian"), MagicMock())
+
+
+def test_recruiter_instance_fail_closed_source_raises_unsupported_before_registry():
+	"""非 zhipin + fail-closed 来源：BrowserSourceUnsupported 必须先于 registry ValueError。"""
+	from boss_agent_cli.api.browser_source import BrowserSourceUnsupported
+
+	with pytest.raises(BrowserSourceUnsupported):
+		get_recruiter_platform_instance(
+			_ctx(platform="zhilian", browser_source="stored-cookie"), MagicMock()
+		)
+
+
+def test_recruiter_instance_passes_browser_source_to_client(monkeypatch):
+	"""非默认来源必须显式透传给 BossRecruiterClient。"""
+	captured: dict = {}
+
+	class _Client:
+		def __init__(self, auth, *, delay, cdp_url, browser_source=None):
+			captured.update(browser_source=browser_source)
+
+	monkeypatch.setattr("boss_agent_cli.commands._recruiter_platform.BossRecruiterClient", _Client)
+	get_recruiter_platform_instance(_ctx(browser_source="stored-cookie"), MagicMock())
+
+	assert captured["browser_source"] == "stored-cookie"

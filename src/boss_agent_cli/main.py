@@ -5,6 +5,7 @@ from typing import Any
 import click
 
 from boss_agent_cli import __version__
+from boss_agent_cli.api.browser_source import POLICIES as BROWSER_SOURCES
 from boss_agent_cli.commands.register import register_candidate_commands, register_recruiter_commands
 from boss_agent_cli.config import load_config
 from boss_agent_cli.hooks import create_hook_bus
@@ -57,12 +58,13 @@ class BossCliGroup(click.Group):
 @click.option("--data-dir", default="~/.boss-agent", help="数据存储目录")
 @click.option("--delay", default=None, help="请求间隔范围（秒），如 1.5-3.0")
 @click.option("--cdp-url", default=None, help="Chrome CDP 调试地址（如 http://localhost:9222），启用则优先用用户 Chrome")
+@click.option("--browser-source", default=None, type=click.Choice(list(BROWSER_SOURCES)), help="浏览器通道来源：auto（默认，允许降级）/ existing-browser（复用现有浏览器）/ stored-cookie（fail-closed，只连指定 CDP，不降级）")
 @click.option("--platform", "platform_name", default=None, help="指定招聘平台适配器（默认 zhipin，即 BOSS 直聘）")
 @click.option("--role", default=None, type=click.Choice(["candidate", "recruiter"]), help="角色模式：candidate（求职者，默认）/ recruiter（招聘者）")
 @click.option("--log-level", default=None, type=click.Choice(["error", "warning", "info", "debug"]))
 @click.option("--json/--no-json", "json_output", default=False, help="强制 JSON 输出（即使在终端中）")
 @click.pass_context
-def cli(ctx: click.Context, data_dir: str, delay: str | None, cdp_url: str | None, platform_name: str | None, role: str | None, log_level: str | None, json_output: bool) -> None:
+def cli(ctx: click.Context, data_dir: str, delay: str | None, cdp_url: str | None, browser_source: str | None, platform_name: str | None, role: str | None, log_level: str | None, json_output: bool) -> None:
 	ctx.ensure_object(dict)
 	resolved_dir = Path(data_dir).expanduser()
 	resolved_dir.mkdir(parents=True, exist_ok=True)
@@ -87,6 +89,16 @@ def cli(ctx: click.Context, data_dir: str, delay: str | None, cdp_url: str | Non
 	ctx.obj["log_level"] = level
 	ctx.obj["logger"] = Logger(level)
 	ctx.obj["cdp_url"] = cdp_url or cfg.get("cdp_url")
+
+	# 归一化（大小写/首尾空白）后再校验，与下游 resolve_policy 的 .strip().lower() 一致，
+	# 避免 config.json 里 "Auto" / " stored-cookie " 这类值被 CLI 拒绝、策略层却接受的不一致。
+	resolved_browser_source = (browser_source or cfg.get("browser_source") or "auto").strip().lower()
+	if resolved_browser_source not in BROWSER_SOURCES:
+		raise click.BadParameter(
+			f"unknown browser source {resolved_browser_source!r}, supported: {', '.join(BROWSER_SOURCES)}",
+			param_hint="--browser-source",
+		)
+	ctx.obj["browser_source"] = resolved_browser_source
 
 	resolved_platform = platform_name or cfg.get("platform") or "zhipin"
 	available = list_platforms()

@@ -8,11 +8,13 @@ from typing import Any
 
 import click
 
+from boss_agent_cli.api.browser_source import POLICIES as BROWSER_SOURCES
 from boss_agent_cli.config import DEFAULTS
 from boss_agent_cli.display import handle_output, render_simple_list
 
 _CONFIG_CHOICES = {
 	"operating_mode": ("assisted", "research"),
+	"browser_source": tuple(BROWSER_SOURCES),
 }
 _PUBLIC_CONFIG_KEYS = tuple(
 	key for key in DEFAULTS

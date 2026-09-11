@@ -277,8 +277,8 @@ def _action_context(tmp_path, *, role="candidate", candidate=None, recruiter=Non
 		platform="zhipin",
 		role=role,
 		logger=Logger(),
-		candidate_factory=(lambda name, auth, delay, cdp_url: candidate if candidate is not None else None),
-		recruiter_factory=(lambda name, auth, delay, cdp_url: recruiter if recruiter is not None else None),
+		candidate_factory=(lambda name, auth, delay, cdp_url, browser_source=None: candidate if candidate is not None else None),
+		recruiter_factory=(lambda name, auth, delay, cdp_url, browser_source=None: recruiter if recruiter is not None else None),
 	)
 
 

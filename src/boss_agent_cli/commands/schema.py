@@ -1085,6 +1085,13 @@ SCHEMA_DATA = {
 			"default": None,
 			"description": "Chrome CDP 调试地址（兼容保留）。不得用于规避平台风控或重试被平台拦截的操作。",
 		},
+		"--browser-source": {
+			"type": "string",
+			"default": "auto",
+			"choices": ["auto", "existing-browser", "stored-cookie"],
+			"stability": "experimental",
+			"description": "浏览器通道来源。auto 允许 Bridge→CDP→headless 降级；existing-browser 只复用现有浏览器（Bridge/CDP），不读本地凭据、不启动浏览器；stored-cookie 为 fail-closed，只连 --cdp-url 指定的 CDP 端点，不自动探测、不降级、空浏览器不新建 context，不可用发 CDP_UNAVAILABLE。不得用于规避平台风控。",
+		},
 		"--platform": {
 			"type": "string",
 			"default": "zhipin",
@@ -1384,6 +1391,7 @@ def schema_cmd(ctx: click.Context, output_format: str) -> None:
 	current = (ctx.obj or {}).get("platform") or "zhipin"
 	data["current_platform"] = current
 	data["current_role"] = (ctx.obj or {}).get("role") or "candidate"
+	data["current_browser_source"] = (ctx.obj or {}).get("browser_source") or "auto"
 	data["supported_platforms"] = list_platforms()
 	data["supported_recruiter_platforms"] = list_recruiter_platforms()
 	data["wizard_catalog"] = catalog_data()

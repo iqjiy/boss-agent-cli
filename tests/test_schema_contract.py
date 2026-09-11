@@ -211,3 +211,11 @@ def test_schema_environment_risk_is_terminal():
 	assert spec["recoverable"] is False
 	assert spec["recovery_action"] == "停止自动化访问；保留当前专用 profile，在官方页面确认并降低访问频率"
 	assert spec["message"] == "访问环境存在异常"
+
+
+def test_schema_documents_browser_source_flag():
+	"""--browser-source 必须进入 schema global_options，choices 为三类来源且标 experimental。"""
+	flag = SCHEMA_DATA["global_options"]["--browser-source"]
+	assert flag["choices"] == ["auto", "existing-browser", "stored-cookie"]
+	assert flag["default"] == "auto"
+	assert flag["stability"] == "experimental"
